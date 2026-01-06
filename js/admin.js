@@ -2,6 +2,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize mock API and load data
     api.init().then(()=>{
+        // Show dashboard section by default
+        showSection('dashboard');
         loadEmployees();
         loadProjects();
         loadLogs();
@@ -9,16 +11,15 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDashboard();
         applyPermissionUI();
         loadPermissions();
+        // Show dashboard section by default after everything is loaded
+        setTimeout(() => {
+            showSection('dashboard', document.querySelector('.sidebar-menu a[onclick*="dashboard"]'));
+        }, 100);
     });
 });
 
 // Navigation Logic
-function showSection(sectionName) {
-    // Hide all sections, BUT ensure stats usually stay visible if we want, 
-    // or we can toggle them. For this design, let's keep stats on top of 'employees' only or make it a dashboard home.
-    // For simplicity based on user request "Admin ko ek glance me sab samajh aa jaye", let's keep stats visible on 'employees' (which acts as Dashboard home)
-    document.querySelectorAll('.section').forEach(el => el.classList.add('hidden'));
-
+function showSection(sectionName, clickedElement) {
     // Hide all sections
     document.querySelectorAll('.section').forEach(el => el.classList.add('hidden'));
 
@@ -31,13 +32,21 @@ function showSection(sectionName) {
         'dashboard': 'dashboardSection',
         'profile': 'profileSection',
         'permissions': 'permissionsSection',
-        'reports': 'reportsSection'
+        'reports': 'reportsSection',
+        'tasks': 'tasksSection'
     };
 
     // Show the requested section
     const activeId = sectionMap[sectionName];
     if (activeId) {
-        document.getElementById(activeId).classList.remove('hidden');
+        const sectionEl = document.getElementById(activeId);
+        if (sectionEl) {
+            sectionEl.classList.remove('hidden');
+        } else {
+            console.warn('Section element not found:', activeId);
+        }
+    } else {
+        console.warn('Unknown section:', sectionName);
     }
 
     // Update Header Title
@@ -47,22 +56,45 @@ function showSection(sectionName) {
         'projects': 'Project Overview',
         'logs': 'System Activity Logs',
         'dashboard': 'Dashboard',
-        'profile': 'Employee Profile'
+        'profile': 'Employee Profile',
+        'permissions': 'Permissions & Role Settings',
+        'reports': 'Reports & Analytics',
+        'tasks': 'Tasks & Work Overview'
     };
-    document.getElementById('pageTitle').innerText = titleMap[sectionName] || 'Admin Panel';
+    const pageTitleEl = document.getElementById('pageTitle');
+    if (pageTitleEl) {
+        pageTitleEl.innerText = titleMap[sectionName] || 'Admin Panel';
+    }
 
-    // Update Sidebar Active State (if element provided mark it, otherwise clear all)
+    // Update Sidebar Active State
     document.querySelectorAll('.sidebar-menu a').forEach(el => el.classList.remove('active'));
-    if (arguments[1]) {
-        arguments[1].classList.add('active');
+    if (clickedElement && clickedElement.classList) {
+        clickedElement.classList.add('active');
     } else {
-        // try to find sidebar anchor whose onclick contains the section name
-        const sel = Array.from(document.querySelectorAll('.sidebar-menu a')).find(a => (a.getAttribute('onclick')||'').includes(sectionName));
+        // Fallback: try to find sidebar anchor whose onclick contains the section name
+        const sel = Array.from(document.querySelectorAll('.sidebar-menu a')).find(a => {
+            const onclick = a.getAttribute('onclick') || '';
+            return onclick.includes(sectionName);
+        });
         if (sel) sel.classList.add('active');
     }
-    // Special: if dashboard requested, refresh dashboard contents
-    if (sectionName === 'dashboard') loadDashboard();
-    if (sectionName === 'reports') loadReports();
+
+    // Load section-specific data
+    if (sectionName === 'dashboard') {
+        loadDashboard();
+    } else if (sectionName === 'reports') {
+        loadReports();
+    } else if (sectionName === 'tasks') {
+        loadTasks();
+    } else if (sectionName === 'employees') {
+        loadEmployees();
+    } else if (sectionName === 'projects') {
+        loadProjects();
+    } else if (sectionName === 'logs') {
+        loadLogs();
+    } else if (sectionName === 'transfer') {
+        populateTransferSelects();
+    }
 }
 
 // 1. Employee Management
@@ -70,7 +102,23 @@ function loadEmployees() {
     const tableBody = document.getElementById('employeeTableBody');
     tableBody.innerHTML = '';
 
-    employees.forEach(emp => {
+    // Apply search filter if present
+    let list = employees || [];
+    if (currentSearchQuery && currentSearchQuery.length > 0) {
+        const q = currentSearchQuery;
+        list = list.filter(emp => {
+            const haystack = [
+                emp.name,
+                emp.role,
+                emp.project,
+                emp.status,
+                emp.id != null ? String(emp.id) : ''
+            ].join(' ').toLowerCase();
+            return haystack.includes(q);
+        });
+    }
+
+    list.forEach(emp => {
         const tr = document.createElement('tr');
 
         const statusBadge = emp.status === 'Active'
@@ -307,7 +355,7 @@ function loadTasks() {
             <td>${t.status || '-'}</td>
             <td>${t.dueDate || '-'}</td>
             <td>${(projects.find(p=>p.id==t.projectId)||{}).name || t.project || '-'}</td>
-            <td><button class="btn btn-outline" onclick="alert('Edit Task')">Edit</button></td>
+            <td><button class="btn btn-outline" onclick="openEditTaskModal(${t.id})">Edit</button></td>
         `;
         tbody.appendChild(tr);
     });
@@ -355,16 +403,69 @@ function saveTaskFromForm(){
     const projectId = projectVal ? parseInt(projectVal) : null;
     const due = document.getElementById('taskDue').value || '';
     const status = document.getElementById('taskStatusSelect').value || 'Pending';
-    const nextId = tasks.length ? Math.max(...tasks.map(t=>t.id)) + 1 : 1001;
-    const t = { id: nextId, task: name, status: status, dueDate: due, assignedBy: currentUser.name, handledBy: handledBy, projectId: projectId };
-    tasks.push(t);
-    const nextLogId = activityLogs.length ? Math.max(...activityLogs.map(l => l.id)) + 1 : 1;
-    activityLogs.push({ id: nextLogId, user: currentUser.name || 'Admin', action: `Created task '${name}'`, time: formatDateTime(new Date()) });
+
+    if (editingTaskId) {
+        // Update existing task
+        const existing = tasks.find(t => t.id === editingTaskId);
+        if (existing) {
+            existing.task = name;
+            existing.status = status;
+            existing.dueDate = due;
+            existing.handledBy = handledBy;
+            existing.projectId = projectId;
+            const nextLogId = activityLogs.length ? Math.max(...activityLogs.map(l => l.id)) + 1 : 1;
+            activityLogs.push({
+                id: nextLogId,
+                user: currentUser.name || 'Admin',
+                action: `Updated task '${name}'`,
+                time: formatDateTime(new Date())
+            });
+        }
+    } else {
+        // Create new task
+        const nextId = tasks.length ? Math.max(...tasks.map(t=>t.id)) + 1 : 1001;
+        const t = { id: nextId, task: name, status: status, dueDate: due, assignedBy: currentUser.name, handledBy: handledBy, projectId: projectId };
+        tasks.push(t);
+        const nextLogId = activityLogs.length ? Math.max(...activityLogs.map(l => l.id)) + 1 : 1;
+        activityLogs.push({ id: nextLogId, user: currentUser.name || 'Admin', action: `Created task '${name}'`, time: formatDateTime(new Date()) });
+    }
     api.saveAll().then(()=>{
         loadTasks();
         closeTaskModal();
-        showToast('Task created', 'success');
+        showToast(editingTaskId ? 'Task updated' : 'Task created', 'success');
     });
+}
+
+function openEditTaskModal(id){
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    editingTaskId = id;
+    document.getElementById('taskModalTitle').innerText = 'Edit Task';
+    document.getElementById('taskName').value = task.task || '';
+    document.getElementById('taskDue').value = task.dueDate || '';
+    document.getElementById('taskStatusSelect').value = task.status || 'Pending';
+
+    // repopulate selects
+    const assignSel = document.getElementById('taskAssign');
+    assignSel.innerHTML = '<option value="">Unassigned</option>';
+    employees.forEach(emp => {
+        const opt = document.createElement('option');
+        opt.value = emp.name;
+        opt.textContent = `${emp.name} (${emp.role})`;
+        if (task.handledBy === emp.name) opt.selected = true;
+        assignSel.appendChild(opt);
+    });
+    const projSel = document.getElementById('taskProjectSelect');
+    projSel.innerHTML = '<option value="">Select Project</option>';
+    projects.forEach(p=>{
+        const o=document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name;
+        if (String(task.projectId) === String(p.id)) o.selected = true;
+        projSel.appendChild(o);
+    });
+
+    document.getElementById('taskModal').classList.remove('hidden');
 }
 
 /* ---------- Reports & Analytics ---------- */
@@ -633,6 +734,17 @@ function handleTransfer() {
         action: `Transferred ${transferredCount} task(s) from ${leaverName} to ${receiverName}`,
         time: formatDateTime(new Date())
     });
+
+    // Persist changes
+    try {
+        if (window.api && typeof window.api.saveAll === 'function') {
+            window.api.saveAll();
+        } else {
+            saveToStorage();
+        }
+    } catch (e) {
+        console.error('Failed to persist transfer changes', e);
+    }
 
     // Refresh UI
     loadEmployees();

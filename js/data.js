@@ -162,8 +162,26 @@ const activityLogs = [
   { id: 6, user: 'Admin', action: "Imported employees via CSV", time: '2023-10-01 03:20 PM' }
 ];
 
+// Default demo user; this will be merged with any real login user from localStorage.
 const currentUser = {
   name: "Amit Sharma",
   role: "Developer",
   project: "CRM System"
 };
+
+// If the login flow (auth.js) has stored a real user in localStorage,
+// merge it into currentUser so that permissions and UI reflect the
+// actual logged-in account (Admin vs Employee, etc.).
+try {
+  const storedRaw = localStorage.getItem('currentUser');
+  if (storedRaw) {
+    const stored = JSON.parse(storedRaw);
+    if (stored && typeof stored === 'object') {
+      if (stored.name) currentUser.name = stored.name;
+      if (stored.role) currentUser.role = stored.role;
+      if (stored.project) currentUser.project = stored.project;
+    }
+  }
+} catch (e) {
+  console.warn('Unable to read currentUser from localStorage', e);
+}

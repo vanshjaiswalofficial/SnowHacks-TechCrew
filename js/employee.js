@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     // seed sample tasks first, then render
     ensureMyTasksSample();
+    // Show dashboard section by default
+    showSection('dashboard');
     loadTasks();
     loadAllTasks();
 });
@@ -39,18 +41,60 @@ function ensureMyTasksSample() {
 ensureMyTasksSample();
 loadTasks();
 
-function showSection(sectionName, el){
-    document.querySelectorAll('.section').forEach(s=>s.classList.add('hidden'));
-    const sectionMap = { 'dashboard':'dashboardSection','tasks':'tasksSection','transfer':'transferSection','docs':'docsSection' };
-    const id = sectionMap[sectionName]; if (id) document.getElementById(id).classList.remove('hidden');
-    const titleMap = { 'dashboard':'My Dashboard','tasks':'My Tasks','transfer':'Previous Work History','docs':'Document Repository' };
-    document.getElementById('pageTitle').innerText = titleMap[sectionName] || 'My Dashboard';
-    document.querySelectorAll('.sidebar-menu a').forEach(a=>a.classList.remove('active'));
-    if (el && el.classList) el.classList.add('active'); else {
-        const sel = Array.from(document.querySelectorAll('.sidebar-menu a')).find(a=> (a.getAttribute('onclick')||'').includes(sectionName));
+function showSection(sectionName, clickedElement){
+    // Hide all sections
+    document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+    
+    // Sections that map to element IDs
+    const sectionMap = { 
+        'dashboard': 'dashboardSection',
+        'tasks': 'tasksSection',
+        'transfer': 'transferSection',
+        'docs': 'docsSection' 
+    };
+    
+    // Show the requested section
+    const id = sectionMap[sectionName];
+    if (id) {
+        const sectionEl = document.getElementById(id);
+        if (sectionEl) {
+            sectionEl.classList.remove('hidden');
+        }
+    }
+    
+    // Update Header Title
+    const titleMap = { 
+        'dashboard': 'My Dashboard',
+        'tasks': 'My Tasks',
+        'transfer': 'Previous Work History',
+        'docs': 'Document Repository' 
+    };
+    const pageTitleEl = document.getElementById('pageTitle');
+    if (pageTitleEl) {
+        pageTitleEl.innerText = titleMap[sectionName] || 'My Dashboard';
+    }
+    
+    // Update Sidebar Active State
+    document.querySelectorAll('.sidebar-menu a').forEach(a => a.classList.remove('active'));
+    if (clickedElement && clickedElement.classList) {
+        clickedElement.classList.add('active');
+    } else {
+        // Fallback: find sidebar anchor by onclick attribute
+        const sel = Array.from(document.querySelectorAll('.sidebar-menu a')).find(a => {
+            const onclick = a.getAttribute('onclick') || '';
+            return onclick.includes(sectionName);
+        });
         if (sel) sel.classList.add('active');
     }
-    if (sectionName === 'tasks') loadAllTasks();
+    
+    // Load section-specific data
+    if (sectionName === 'tasks') {
+        loadAllTasks();
+    } else if (sectionName === 'dashboard') {
+        loadTasks();
+    } else if (sectionName === 'transfer') {
+        renderEmployeeExtras();
+    }
 }
 
 function loadTasks() {
@@ -155,3 +199,21 @@ function renderEmployeeExtras(){
 
 // call extras renderer after page load
 document.addEventListener('DOMContentLoaded', ()=>{ renderEmployeeExtras(); });
+
+// Simple upload handler so the "Upload File" button does something useful.
+// This does not persist to backend; it just shows a confirmation for now.
+function uploadEmployeeDocument() {
+    const input = document.getElementById('employeeDocInput');
+    if (!input) {
+        alert('Upload not available on this page.');
+        return;
+    }
+    input.onchange = (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        alert(`File "${file.name}" selected for upload (demo only).`);
+        // reset so the same file can be chosen again
+        e.target.value = '';
+    };
+    input.click();
+}
