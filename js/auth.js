@@ -23,7 +23,7 @@ document.getElementById('loginForm').addEventListener('submit', function (e) {
         localStorage.setItem('currentUser', JSON.stringify(data.user));
         if (data.user.role && data.user.role.toLowerCase() === 'admin') window.location.href = 'admin.html';
         else window.location.href = 'employee.html';
-    }).catch(err => {
+    }).catch(async err => {
         // If err has a message from server (authentication failed), show it
         if (err && err.error) {
             errorMsg.textContent = err.error || 'Login failed';
@@ -32,6 +32,22 @@ document.getElementById('loginForm').addEventListener('submit', function (e) {
         }
         // network error or server not running: fallback to client-only demo
         console.warn('Auth server unreachable, falling back to client demo.', err);
+        try {
+            // Check for local users array
+            const ulist = window.users || [];
+            const hashed = await hashPassword(password);
+            const matched = ulist.find(u => (u.email||'').toLowerCase() === email.toLowerCase() && (u.password === password || u.password === hashed));
+            if (matched) {
+                const user = { name: matched.name || matched.email, role: matched.role || 'Employee', email: matched.email };
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                if ((matched.role||'').toLowerCase() === 'admin') window.location.href = 'admin.html';
+                else window.location.href = 'employee.html';
+                return;
+            }
+        } catch (e) {
+            console.warn('Local auth fallback failed', e);
+        }
+        // final fallback: naive redirect (keeps previous behavior)
         if (email.includes('admin')) window.location.href = 'admin.html';
         else {
             localStorage.setItem('currentUser', JSON.stringify({ name: 'Amit Sharma', role: 'Developer', email }));
@@ -39,3 +55,18 @@ document.getElementById('loginForm').addEventListener('submit', function (e) {
         }
     });
 });
+
+// Hash password using Web Crypto API (returns hex string)
+async function hashPassword(password) {
+    if (!password) return '';
+    try {
+        const enc = new TextEncoder();
+        const data = enc.encode(password);
+        const hash = await crypto.subtle.digest('SHA-256', data);
+        const bytes = Array.from(new Uint8Array(hash));
+        return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+        console.warn('hashPassword failed', e);
+        return password; // fallback (insecure)
+    }
+}

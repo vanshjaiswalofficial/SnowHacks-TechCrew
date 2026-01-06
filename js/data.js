@@ -6,6 +6,7 @@ const employees = [
     status: "Left",
     project: "CRM System"
     ,
+    exitSummary: 'Left the organization on 2023-10-30. Handover completed to Amit Sharma; reason documented as personal. All code and docs transferred and the remaining tasks were reassigned.',
     previousWork: [
       { year: 2021, desc: 'Legacy CRM maintenance and bugfixes' },
       { year: 2020, desc: 'E-commerce payment gateway integration' },
@@ -185,3 +186,42 @@ try {
 } catch (e) {
   console.warn('Unable to read currentUser from localStorage', e);
 }
+
+// Demo users for client-side auth fallback (email/password are plaintext for demo only)
+const users = [
+  { id: 1, email: 'admin@company.com', password: 'admin123', role: 'Admin', name: 'System Admin', employeeId: null },
+  { id: 2, email: 'amit.sharma@company.com', password: 'amit123', role: 'Employee', name: 'Amit Sharma', employeeId: 2 },
+  { id: 3, email: 'sneha.gupta@company.com', password: 'sneha123', role: 'Employee', name: 'Sneha Gupta', employeeId: 3 },
+  { id: 4, email: 'rahul.verma@company.com', password: 'rahul123', role: 'Employee', name: 'Rahul Verma', employeeId: 1 }
+];
+
+try {
+  const storedUsers = localStorage.getItem('ews_users');
+  if (storedUsers) {
+    const parsed = JSON.parse(storedUsers);
+    if (Array.isArray(parsed) && parsed.length) {
+      // merge or replace demo users
+      // prefer persisted users, but keep demo fallback if none
+      window.users = parsed;
+    } else {
+      window.users = users;
+    }
+  } else {
+    window.users = users;
+  }
+} catch (e) { console.warn('Unable to load users from localStorage', e); window.users = users; }
+
+// If loaded users contain plaintext passwords, hash them once for better security
+(async function normalizeUserPasswords(){
+  try{
+    if (!window.users) return;
+    let changed = false;
+    for (let u of window.users) {
+      if (u.password && u.password.length && !/^[0-9a-f]{64}$/i.test(u.password)) {
+        // likely plaintext, hash it
+        try { u.password = await (async function(p){ const enc=new TextEncoder(); const h=await crypto.subtle.digest('SHA-256', enc.encode(p)); return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join(''); })(u.password); changed = true; } catch(e){}
+      }
+    }
+    if (changed) localStorage.setItem('ews_users', JSON.stringify(window.users));
+  }catch(e){/* ignore */}
+})();

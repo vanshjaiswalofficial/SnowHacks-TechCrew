@@ -18,6 +18,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// Simple client-side hash helper (hex SHA-256)
+async function hashPassword(password) {
+    if (!password) return '';
+    try {
+        const enc = new TextEncoder();
+        const data = enc.encode(password);
+        const hash = await crypto.subtle.digest('SHA-256', data);
+        const bytes = Array.from(new Uint8Array(hash));
+        return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+        console.warn('hashPassword failed', e);
+        return password;
+    }
+}
+
 // Navigation Logic
 function showSection(sectionName, clickedElement) {
     // Hide all sections
@@ -26,6 +41,7 @@ function showSection(sectionName, clickedElement) {
     // Sections that map to element IDs
     const sectionMap = {
         'employees': 'employeesSection',
+        'users': 'usersSection',
         'transfer': 'transferSection',
         'projects': 'projectsSection',
         'logs': 'logsSection',
@@ -88,6 +104,8 @@ function showSection(sectionName, clickedElement) {
         loadTasks();
     } else if (sectionName === 'employees') {
         loadEmployees();
+    } else if (sectionName === 'users') {
+        loadUsers();
     } else if (sectionName === 'projects') {
         loadProjects();
     } else if (sectionName === 'logs') {
@@ -157,6 +175,83 @@ function loadEmployees() {
         `;
         tableBody.appendChild(tr);
     });
+}
+
+// --- User Management ---
+let editingUserId = null;
+function openAddUserModal(){
+    editingUserId = null;
+    document.getElementById('userModalTitle').innerText = 'Add User';
+    document.getElementById('userEmail').value = '';
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userRole').value = 'Employee';
+    populateUserEmployeeLinks();
+    document.getElementById('userModal').classList.remove('hidden');
+}
+function closeUserModal(){ document.getElementById('userModal').classList.add('hidden'); }
+
+function populateUserEmployeeLinks(){
+    const sel = document.getElementById('userEmployeeLink');
+    if (!sel) return; sel.innerHTML = '<option value="">(No linked employee)</option>';
+    (employees||[]).forEach(e=>{
+        const opt = document.createElement('option'); opt.value = e.id; opt.textContent = `${e.name} (${e.id})`; sel.appendChild(opt);
+    });
+}
+
+function loadUsers(){
+    const body = document.getElementById('usersTableBody'); if (!body) return; body.innerHTML = '';
+    const list = window.users || [];
+    list.forEach(u=>{
+        const tr = document.createElement('tr');
+        const linked = u.employeeId ? (employees.find(e=>e.id===u.employeeId)||{}).name : '';
+        tr.innerHTML = `<td>#${u.id}</td><td>${u.email}</td><td>${u.role}</td><td>${linked||'-'}</td><td><button class="btn btn-outline" onclick="openEditUser(${u.id})">Edit</button> <button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete</button></td>`;
+        body.appendChild(tr);
+    });
+}
+
+function openEditUser(id){
+    const u = (window.users||[]).find(x=>x.id===id); if(!u) return; editingUserId = id;
+    document.getElementById('userModalTitle').innerText = 'Edit User';
+    document.getElementById('userEmail').value = u.email || '';
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userRole').value = u.role || 'Employee';
+    populateUserEmployeeLinks();
+    if (u.employeeId) document.getElementById('userEmployeeLink').value = u.employeeId;
+    document.getElementById('userModal').classList.remove('hidden');
+}
+
+async function saveUserFromForm(){
+    const email = document.getElementById('userEmail').value.trim();
+    const password = document.getElementById('userPassword').value;
+    const role = document.getElementById('userRole').value;
+    const empId = document.getElementById('userEmployeeLink').value || null;
+    if(!email) { showToast('Email required','error'); return; }
+    window.users = window.users || [];
+    if (editingUserId) {
+        const u = window.users.find(x=>x.id===editingUserId);
+        if(!u) return;
+        u.email = email; u.role = role; u.employeeId = empId ? Number(empId) : null;
+        if (password) {
+            u.password = await hashPassword(password);
+        }
+        showToast('User updated','success');
+    } else {
+        const nextId = window.users.length ? Math.max(...window.users.map(x=>x.id))+1 : 1;
+        const hashed = password ? await hashPassword(password) : '';
+        const u = { id: nextId, email, password: hashed, role, name: email, employeeId: empId ? Number(empId) : null };
+        window.users.push(u);
+        showToast('User added','success');
+    }
+    try{ localStorage.setItem('ews_users', JSON.stringify(window.users)); } catch(e){}
+    api.saveAll();
+    closeUserModal(); loadUsers();
+}
+
+function deleteUser(id){
+    if (!confirm('Delete this user?')) return;
+    window.users = (window.users||[]).filter(u=>u.id!==id);
+    try{ localStorage.setItem('ews_users', JSON.stringify(window.users)); } catch(e){}
+    api.saveAll(); loadUsers(); showToast('User deleted','warning');
 }
 
 function deactivateEmployee(id) {
@@ -579,8 +674,11 @@ function openEmployeeProfile(id) {
 function loadEmployeeProfile(id) {
     const emp = employees.find(e => e.id == id);
     if (!emp) return;
+    // show basic meta + linked user email/login status if available
+    const linkedUser = (window.users || []).find(u => u.employeeId === emp.id);
+    const emailPart = linkedUser ? `${linkedUser.email}` : 'No login';
     document.getElementById('profileName').innerText = emp.name;
-    document.getElementById('profileMeta').innerText = `${emp.role} · ${emp.project || '—'} · ${emp.status}`;
+    document.getElementById('profileMeta').innerText = `${emp.role} · ${emp.project || '—'} · ${emp.status} · ${emailPart}`;
 
     // Tasks
     const taskBody = document.getElementById('profileTasksBody');
@@ -821,6 +919,9 @@ function saveEmployeeFromForm() {
     const name = document.getElementById('empName').value.trim();
     const role = document.getElementById('empRole').value.trim();
     const project = document.getElementById('empProject').value.trim();
+    const email = (document.getElementById('empEmail') && document.getElementById('empEmail').value.trim()) || '';
+    const password = (document.getElementById('empPassword') && document.getElementById('empPassword').value) || '';
+    const isAdmin = (document.getElementById('empIsAdmin') && document.getElementById('empIsAdmin').checked) || false;
     const status = document.getElementById('empStatus').value;
     if (!name || !role) {
         showToast('Name and Role are required.', 'error');
@@ -832,6 +933,16 @@ function saveEmployeeFromForm() {
         emp.role = role;
         emp.project = project;
         emp.status = status;
+        // update user record if exists
+        try {
+            const u = (window.users || []).find(x => x.employeeId === emp.id);
+            if (u) {
+                if (email) u.email = email;
+                if (password) u.password = password;
+                u.role = isAdmin ? 'Admin' : 'Employee';
+                if (!u.name) u.name = emp.name;
+            }
+        } catch (e) { console.warn('update user for emp edit', e); }
         const nextLogId = activityLogs.length ? Math.max(...activityLogs.map(l => l.id)) + 1 : 1;
         activityLogs.push({ id: nextLogId, user: 'Admin', action: `Edited ${emp.name}`, time: formatDateTime(new Date()) });
         showToast('Employee updated.', 'success');
@@ -839,6 +950,16 @@ function saveEmployeeFromForm() {
         const nextId = employees.length ? Math.max(...employees.map(e => e.id)) + 1 : 1;
         const newEmp = { id: nextId, name, role, status, project };
         employees.push(newEmp);
+        // create user credentials if email provided
+        try {
+            if (email) {
+                const nextUserId = (window.users && window.users.length) ? Math.max(...window.users.map(u=>u.id)) + 1 : 1;
+                const userObj = { id: nextUserId, email, password: password || 'changeme', role: isAdmin ? 'Admin' : 'Employee', name, employeeId: nextId };
+                window.users = window.users || [];
+                window.users.push(userObj);
+                try { localStorage.setItem('ews_users', JSON.stringify(window.users)); } catch(e){}
+            }
+        } catch (e) { console.warn('create user for new emp', e); }
         const nextLogId = activityLogs.length ? Math.max(...activityLogs.map(l => l.id)) + 1 : 1;
         activityLogs.push({ id: nextLogId, user: 'Admin', action: `Added ${name}`, time: formatDateTime(new Date()) });
         showToast('Employee added.', 'success');

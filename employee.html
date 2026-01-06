@@ -44,6 +44,23 @@
 
             <!-- Dashboard Overview -->
             <div id="dashboardSection" class="section hidden">
+                <!-- Employee Profile Card -->
+                <div class="card profile-card mb-20">
+                    <div class="flex items-center">
+                        <div class="profile-avatar" id="profileAvatar">
+                            <!-- img inserted by JS -->
+                        </div>
+                        <div class="profile-details ml-16">
+                            <h3 id="profileName">Amit Sharma</h3>
+                            <div class="profile-role text-muted" id="profileRole">Developer</div>
+                            <div class="profile-meta profile-mt8" id="profileMeta">CRM System • Active</div>
+                        </div>
+                        <div class="flex-fill"></div>
+                        <div class="profile-actions">
+                            <button class="btn btn-outline" id="editProfileBtn"><i class="fas fa-user-edit"></i> Edit</button>
+                        </div>
+                    </div>
+                </div>
                 <!-- Top Cards -->
                 <div class="transfer-grid transfer-grid-cols-4">
                     <div class="card text-center">
@@ -94,6 +111,9 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Exit Summary (populated by JS when applicable) -->
+                <div id="exitSummaryCard" class="mb-20"></div>
 
                 <div class="transfer-grid two-col">
                     <!-- Timeline -->
@@ -160,12 +180,8 @@
                         <h3>Project Documents</h3>
                         <button class="btn btn-primary" onclick="uploadEmployeeDocument()"><i class="fas fa-upload"></i> Upload File</button>
                     </div>
-                    <div class="file-list-item">
-                        <div class="flex items-center">
-                            <i class="fas fa-file-word file-icon"></i>
-                            <span>Requirementspec.docx</span>
-                        </div>
-                        <span class="badge">v1.2</span>
+                    <div id="projectDocsList" class="mt-10">
+                        <!-- Project documents will be rendered here by JS -->
                     </div>
                 </div>
             </div>

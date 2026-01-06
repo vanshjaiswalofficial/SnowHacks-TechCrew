@@ -7,6 +7,7 @@
     activityLogs: 'ews_activityLogs',
     permissions: 'ews_permissions'
   };
+  STORAGE_KEYS.users = 'ews_users';
 
   const defaultPermissions = {
     Admin: ['employee:add','employee:edit','employee:deactivate','employee:import','employee:export','project:create','task:transfer','view_logs','attach_file','view_profile'],
@@ -35,6 +36,7 @@
         window.employees = loadJSON(STORAGE_KEYS.employees, window.employees || []);
         window.tasks = loadJSON(STORAGE_KEYS.tasks, window.tasks || []);
         window.projects = loadJSON(STORAGE_KEYS.projects, window.projects || []);
+        window.users = loadJSON(STORAGE_KEYS.users, window.users || []);
         window.activityLogs = loadJSON(STORAGE_KEYS.activityLogs, window.activityLogs || []);
         const perms = loadJSON(STORAGE_KEYS.permissions, null);
         window.ews_permissions = perms || defaultPermissions;
@@ -49,6 +51,7 @@
         saveJSON(STORAGE_KEYS.employees, window.employees || []);
         saveJSON(STORAGE_KEYS.tasks, window.tasks || []);
         saveJSON(STORAGE_KEYS.projects, window.projects || []);
+        saveJSON(STORAGE_KEYS.users, window.users || []);
         saveJSON(STORAGE_KEYS.activityLogs, window.activityLogs || []);
         resolve(true);
       }, 120);
