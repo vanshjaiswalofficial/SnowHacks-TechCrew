@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Employee Work System</title>
+    <link rel="stylesheet" href="css/dashboard.css"> <!-- Import variables if needed, though login.css is standalone mostly -->
+    <link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <h2>System Login</h2>
+        <div id="errorMsg" class="error-message"></div>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" placeholder="admin@example.com or user@example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter password" required>
+            </div>
+            <button type="submit" class="login-btn">Login</button>
+            <a href="#" class="forgot-password">Forgot Password?</a>
+        </form>
+    </div>
+    <script src="js/auth.js"></script>
+</body>
+</html>
+
